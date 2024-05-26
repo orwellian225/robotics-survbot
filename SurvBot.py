@@ -3,7 +3,7 @@ import rospy as rp
 import math as m
 
 from Vec2 import Vec2
-from Graph import Graph
+# from Graph import Graph
 
 from std_msgs.msg import String, Empty
 from geometry_msgs.msg import Vector3, Twist
@@ -44,7 +44,7 @@ class SurvBot:
             [ 0, 1, 2 ],
             [ 2 ],
         ]
-        self.graph = Graph(graph_vertices, graph_adjacencies)
+        # self.graph = Graph(graph_vertices, graph_adjacencies)
 
         self.pos_sum_error = 0
         self.pos_prev_error = 0
@@ -71,10 +71,12 @@ class SurvBot:
 
     def update(self):
         coordinates, rotation = self.get_world_state()
-        rp.loginfo("\n")
-        rp.loginfo("BOT Status: %s", self.state)
-        rp.loginfo("BOT Position (x,y,z): (%f, %f, %f)", coordinates.x, coordinates.y, coordinates.z)
-        rp.loginfo("BOT Rotation (w,x,y,z): (%f, %f, %f, %f)", rotation.w, rotation.x, rotation.y, rotation.z)
+        if self.state != "IDLE":
+            rp.loginfo("\n")
+            rp.loginfo("BOT Status: %s", self.state)
+            rp.loginfo("BOT Move Queue: %s", len(self.move_queue))
+            rp.loginfo("BOT Position (x,y,z): (%f, %f, %f)", coordinates.x, coordinates.y, coordinates.z)
+            rp.loginfo("BOT Rotation (w,x,y,z): (%f, %f, %f, %f)", rotation.w, rotation.x, rotation.y, rotation.z)
 
         self.position = Vec2(coordinates.x, coordinates.y)
         self.yaw = m.atan2( 2 * ( rotation.w * rotation.z + rotation.x * rotation.y ), 1 - 2 * ( rotation.y**2 + rotation.z**2 ) )
@@ -93,21 +95,21 @@ class SurvBot:
 
     def state_pathfind(self):
         # Temporary - Should actually insert the start / end vertices into the graph
-        start_idx = self.graph.vertices.index(Vec2(
-            m.floor(self.position.x), 
-            m.floor(self.position.y), 
-        ))
+        # start_idx = self.graph.vertices.index(Vec2(
+        #     m.floor(self.position.x), 
+        #     m.floor(self.position.y), 
+        # ))
 
-        goal_idx = self.graph.vertices.index(Vec2(
-            m.floor(self.nav_target.x), 
-            m.floor(self.nav_target.y), 
-        ))
+        # goal_idx = self.graph.vertices.index(Vec2(
+        #     m.floor(self.nav_target.x), 
+        #     m.floor(self.nav_target.y), 
+        # ))
 
-        self.move_queue = self.graph.a_star(start_idx, goal_idx)
+        # self.move_queue = self.graph.a_star(start_idx, goal_idx)
+        self.internal_change_state("NAVIGATE")
 
     def state_navigate(self):
-        next_target = self.move_queue[0]
-        reached_target = self.move_to(self.position, self.yaw, next_target)
+        reached_target = self.move_to(self.position, self.yaw, self.move_queue[0])
 
         if reached_target:
             self.move_queue.pop(0)
@@ -153,6 +155,9 @@ class SurvBot:
         self.nav_target = Vec2(coord_x, coord_y)
         rp.loginfo("Update Navigate Goal (x,y): (%f, %f)", coord_x, coord_y)
 
+        ## TEMPORARY
+        self.move_queue = [ self.nav_target ]
+
     def refresh_patrol_path(self):
         rp.loginfo("Refresh patrol path")
 
@@ -193,10 +198,6 @@ class SurvBot:
         linear_vel = Kp_pos * pos_error + Ki_pos * self.pos_sum_error + Kd_pos * pos_diff_error
         angular_vel = Kp_yaw * yaw_error + Ki_yaw * self.yaw_sum_error + Kd_yaw * yaw_diff_error
 
-        if pos_error < 0.1:
-            reset = Twist()
-            self.velocity_pub.publish(reset)
-            return True
 
         msg = Twist()
         msg.linear.x = linear_vel
@@ -206,6 +207,12 @@ class SurvBot:
         rp.loginfo("BOT Error: %f", pos_error)
         rp.loginfo("BOT forward Vel : %f", linear_vel)
         rp.loginfo("BOT turn Vel : %f", angular_vel)
+
+        if pos_error < 0.1:
+            reset = Twist()
+            self.velocity_pub.publish(reset)
+            return True
+
         self.velocity_pub.publish(msg)
 
         return False

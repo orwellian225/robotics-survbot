@@ -3,10 +3,10 @@ import queue
 from Vec2 import Vec2
 
 class QueueItem:
-    h: float
-    g: float
-    origin_idx: int
-    item_idx: int
+    # h: float
+    # g: float
+    # origin_idx: int
+    # item_idx: int
 
     def __init__(self, item_idx, origin_idx, h, g):
         self.item_idx = item_idx
@@ -24,7 +24,7 @@ class QueueItem:
         return hash(self.item_idx)
 
     def __str__(self):
-        return f"Parent {self.origin_idx} -> Point {self.item_idx} | {self.g + self.h} | {self.g} | {self.h}"
+        return "Parent {0} -> Point {1} | {2} | {3} | {4}".format(self.origin_idx, self.item_idx, self.g + self.h, self.g, self.h)
 
 
 class Graph:
