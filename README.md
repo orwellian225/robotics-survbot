@@ -5,6 +5,7 @@
 * Lisa Godwin
 * Brendan Griffiths
 * Nihal Ranchod
+* Zach Schwark
 
 
 ## Project Overview
