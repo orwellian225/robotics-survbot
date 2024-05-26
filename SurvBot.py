@@ -3,11 +3,11 @@ import rospy as rp
 import math as m
 
 from Vec2 import Vec2
+from Graph import Graph
 
 from std_msgs.msg import String, Empty
 from geometry_msgs.msg import Vector3, Twist
 from gazebo_msgs.srv import GetModelState
-
 
 """
     Survillance Bot
@@ -18,6 +18,7 @@ from gazebo_msgs.srv import GetModelState
         * PATHFIND -> Update the move queue to the Navigation Targat
         * IDLE -> Do Nothing
 """
+all_states = ["IDLE", "NAVIGATE", "PATHFIND", "PATROL"]
 class SurvBot:
     def __init__(self):
         self.state = "IDLE"
@@ -28,6 +29,22 @@ class SurvBot:
         self.nav_target = Vec2(0,0)
         self.position = Vec2(0,0)
         self.yaw = 0
+
+        graph_vertices = [
+            Vec2(-2.0, 1.5),
+            Vec2(0.0, 1.5),
+            Vec2(2.0, 1.5),
+            Vec2(0.0, 0.0),
+            Vec2(5.0, 1.5),
+        ]
+        graph_adjacencies = [
+            [ 1, 3 ],
+            [ 0, 2, 3 ],
+            [ 1, 3, 4 ],
+            [ 0, 1, 2 ],
+            [ 2 ],
+        ]
+        self.graph = Graph(graph_vertices, graph_adjacencies)
 
         self.pos_sum_error = 0
         self.pos_prev_error = 0
@@ -75,7 +92,18 @@ class SurvBot:
         pass
 
     def state_pathfind(self):
-        pass
+        # Temporary - Should actually insert the start / end vertices into the graph
+        start_idx = self.graph.vertices.index(Vec2(
+            m.floor(self.position.x), 
+            m.floor(self.position.y), 
+        ))
+
+        goal_idx = self.graph.vertices.index(Vec2(
+            m.floor(self.nav_target.x), 
+            m.floor(self.nav_target.y), 
+        ))
+
+        self.move_queue = self.graph.a_star(start_idx, goal_idx)
 
     def state_navigate(self):
         next_target = self.move_queue[0]
@@ -88,16 +116,17 @@ class SurvBot:
             self.internal_change_state("IDLE")
 
     def state_patrol(self):
-        next_target = self.move_queue[0]
-        reached_target = self.move_to(self.position, self.yaw, next_target)
+        pass
+        # next_target = self.move_queue[0]
+        # reached_target = self.move_to(self.position, self.yaw, next_target)
 
-        if reached_target:
-            self.move_queue.pop(0)
-            self.move_queue.append(next_target)
+        # if reached_target:
+        #     self.move_queue.pop(0)
+        #     self.move_queue.append(next_target)
 
     def internal_change_state(self, new_state):
         new_state = new_state.upper()
-        if new_state == "IDLE" or new_state == "PATHFIND" or new_state == "NAVIGATE" or new_state == "PATROL":
+        if new_state in all_states:
             rp.loginfo("Changing state: %s -> %s", self.state, new_state)
 
             self.pos_sum_error = 0

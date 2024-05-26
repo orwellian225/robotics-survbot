@@ -11,6 +11,9 @@ class Vec2():
     def __sub__(self, other):
         return Vec2(self.x - other.x, self.y - other.y)
 
+    def __eq__(self, other):
+        return self.x == other.x and self.y == other.y
+
     def dot(self, other):
         return self.x * other.x + self.y * other.y
 
