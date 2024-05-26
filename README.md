@@ -29,7 +29,33 @@ catkin_make
 
 ### Creating a Map
 
+#### Terminal Window 1
+
 ```bash
+cd robot_assignment_ws
+source devel/setup.bash
+
+./startWorld
+```
+
+#### Terminal Window 2
+
+```bash
+source devel/setup.bash
+roslaunch turtlebot_gazebo gmapping_demo.launch
+```
+
+#### Termnial Window 3
+```bash
+source devel/setup.bash
+catkin_make turtlebot_interactions
+roslaunch turtlebot_rviz_launchers view_navigation.launch
+```
+
+#### Terminal Window 4
+```bash
+source devel/setup.bash
+roslaunch kobuki_keyop keyop.launch
 ```
 
 ### Running SurvBot
