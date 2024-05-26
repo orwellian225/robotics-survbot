@@ -2,33 +2,12 @@ import numpy as np
 import rospy as rp
 import math as m
 
+from Vec2 import Vec2
+
 from std_msgs.msg import String, Empty
 from geometry_msgs.msg import Vector3, Twist
 from gazebo_msgs.srv import GetModelState
 
-
-class Vec2():
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
-
-    def __add__(self, other):
-        return Vec2(self.x + other.x, self.y + other.y)
-
-    def __sub__(self, other):
-        return Vec2(self.x - other.x, self.y - other.y)
-
-    def dot(self, other):
-        return self.x * other.x + self.y * other.y
-
-    def magnitude(self):
-        return m.sqrt(self.x**2 + self.y**2)
-
-    def distance_to(self, other):
-        return (self - other).magnitude()
-
-    def angle_to(self, other):
-        return m.acos( self.dot(other) / ( self.magnitude() * other.magnitude() ) )
 
 """
     Survillance Bot
@@ -36,6 +15,7 @@ class Vec2():
     States
         * NAVIGATE -> Move towards the specified goal
         * PATROL -> Move along a cycle in the graph
+        * PATHFIND -> Update the move queue to the Navigation Targat
         * IDLE -> Do Nothing
 """
 class SurvBot:
@@ -46,19 +26,24 @@ class SurvBot:
         self.init_ros_publishers()
 
         self.nav_target = Vec2(0,0)
+        self.position = Vec2(0,0)
+        self.yaw = 0
+
         self.pos_sum_error = 0
         self.pos_prev_error = 0
         self.yaw_sum_error = 0
         self.yaw_prev_error = 0
 
+        self.move_queue = []
+
 
     def init_ros_subscribers(self):
         self.state_sub = rp.Subscriber('/survbot/state', String, self.change_state) # Change state
         self.navgoal_sub = rp.Subscriber('/survbot/state/navigate/goal', Vector3, self.update_goal) # Change Navigate goal
-        self.patrol_sub = rp.Subscriber('/survbot/state/patrol/refresh', Empty, self.refresh_patrol_path) # Refresh the chosen patrol path
 
     def init_ros_publishers(self):
         self.velocity_pub = rp.Publisher('/mobile_base/commands/velocity', Twist, queue_size=1)
+        self.notify_pub = rp.Publisher('/survbot/notifications', String, queue_size=1)
 
     def loop(self):
         rp_rate = rp.Rate(10)
@@ -74,30 +59,64 @@ class SurvBot:
         rp.loginfo("BOT Position (x,y,z): (%f, %f, %f)", coordinates.x, coordinates.y, coordinates.z)
         rp.loginfo("BOT Rotation (w,x,y,z): (%f, %f, %f, %f)", rotation.w, rotation.x, rotation.y, rotation.z)
 
-        position = Vec2(coordinates.x, coordinates.y)
-        yaw = m.atan2( 2 * ( rotation.w * rotation.z + rotation.x * rotation.y ), 1 - 2 * ( rotation.y**2 + rotation.z**2 ) )
+        self.position = Vec2(coordinates.x, coordinates.y)
+        self.yaw = m.atan2( 2 * ( rotation.w * rotation.z + rotation.x * rotation.y ), 1 - 2 * ( rotation.y**2 + rotation.z**2 ) )
 
         if self.state == "IDLE":
-            pass
+            self.state_idle()
+        elif self.state == "PATHFIND":
+            self.state_pathfind()
         elif self.state == "NAVIGATE":
-            self.move_to(position, yaw, self.nav_target)
+            self.state_navigate()
         elif self.state == "PATROL":
-            pass
+            self.state_pathfind()
 
-    def change_state(self, data):
-        new_state = str(data.data)
+    def state_idle(self):
+        pass
+
+    def state_pathfind(self):
+        pass
+
+    def state_navigate(self):
+        next_target = self.move_queue[0]
+        reached_target = self.move_to(self.position, self.yaw, next_target)
+
+        if reached_target:
+            self.move_queue.pop(0)
+
+        if len(self.move_queue) == 0:
+            self.internal_change_state("IDLE")
+
+    def state_patrol(self):
+        next_target = self.move_queue[0]
+        reached_target = self.move_to(self.position, self.yaw, next_target)
+
+        if reached_target:
+            self.move_queue.pop(0)
+            self.move_queue.append(next_target)
+
+    def internal_change_state(self, new_state):
         new_state = new_state.upper()
-
-        if new_state == "IDLE" or new_state == "NAVIGATE" or new_state == "PATROL":
+        if new_state == "IDLE" or new_state == "PATHFIND" or new_state == "NAVIGATE" or new_state == "PATROL":
             rp.loginfo("Changing state: %s -> %s", self.state, new_state)
-            self.state = new_state
 
             self.pos_sum_error = 0
             self.pos_prev_error = 0
             self.yaw_sum_error = 0
             self.yaw_prev_error = 0
+
+            notification = String()
+            notification.data = "state_change {0} -> {1}".format(self.state, new_state)
+            self.notify_pub.publish(notification)
+
+            self.state = new_state 
         else:
             rp.logwarn("Invalid state requested: %s does not exist", new_state)
+
+
+    def change_state(self, data):
+        new_state = str(data.data)
+        self.internal_change_state(new_state)
 
     def update_goal(self, data):
         coord_x = data.x
@@ -146,12 +165,9 @@ class SurvBot:
         angular_vel = Kp_yaw * yaw_error + Ki_yaw * self.yaw_sum_error + Kd_yaw * yaw_diff_error
 
         if pos_error < 0.1:
-            to_idle = String()
-            to_idle.data = "IDLE"
-            self.change_state(to_idle)
             reset = Twist()
             self.velocity_pub.publish(reset)
-            return
+            return True
 
         msg = Twist()
         msg.linear.x = linear_vel
@@ -162,6 +178,8 @@ class SurvBot:
         rp.loginfo("BOT forward Vel : %f", linear_vel)
         rp.loginfo("BOT turn Vel : %f", angular_vel)
         self.velocity_pub.publish(msg)
+
+        return False
 
 def main():
     """
