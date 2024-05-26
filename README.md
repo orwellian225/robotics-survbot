@@ -59,6 +59,14 @@ source devel/setup.bash
 roslaunch kobuki_keyop keyop.launch
 ```
 
+#### Terminal Window 5
+Saving a map -> make a maps directory
+```bash
+mkdir maps
+cd maps
+rosrun map_server map_saver -f <map_name>
+```
+
 ### Running SurvBot
 
 #### Terminal Window 1
