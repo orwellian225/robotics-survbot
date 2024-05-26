@@ -2,7 +2,7 @@ import numpy as np
 import rospy as rp
 import math as m
 
-from std_msgs.msg import String, Empty, Float32MultiArray
+from std_msgs.msg import String, Empty
 from geometry_msgs.msg import Vector3, Twist
 from gazebo_msgs.srv import GetModelState
 
@@ -135,8 +135,9 @@ class SurvBot:
         pos_diff_error = pos_error - self.pos_prev_error
         self.pos_prev_error = pos_error
 
-        target_yaw = current_position.angle_to(target_position)
-        yaw_error = target_yaw - current_yaw
+        target_direction = target_position - current_position
+        bot_direction = Vec2( m.cos(current_yaw), m.sin(current_yaw) )
+        yaw_error = target_direction.angle_to(bot_direction)
         self.yaw_sum_error += yaw_error
         yaw_diff_error = yaw_error - self.yaw_prev_error
         self.yaw_prev_error = yaw_error
@@ -145,7 +146,9 @@ class SurvBot:
         angular_vel = Kp_yaw * yaw_error + Ki_yaw * self.yaw_sum_error + Kd_yaw * yaw_diff_error
 
         if pos_error < 0.1:
-            self.change_state("IDLE")
+            to_idle = String()
+            to_idle.data = "IDLE"
+            self.change_state(to_idle)
             reset = Twist()
             self.velocity_pub.publish(reset)
             return
