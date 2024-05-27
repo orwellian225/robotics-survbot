@@ -1,6 +1,7 @@
 import numpy as np
 import rospy as rp
 import math as m
+import random
 
 from Vec2 import Vec2
 from Graph import Graph
@@ -19,6 +20,8 @@ from gazebo_msgs.srv import GetModelState
         * IDLE -> Do Nothing
 """
 all_states = ["IDLE", "NAVIGATE", "PATHFIND", "PATROL"]
+num_vertices = 1000
+num_neighbours = 20
 class SurvBot:
     def __init__(self):
         self.state = "IDLE"
@@ -26,25 +29,10 @@ class SurvBot:
         self.init_ros_subscribers()
         self.init_ros_publishers()
 
+
         self.nav_target = Vec2(0,0)
         self.position = Vec2(0,0)
         self.yaw = 0
-
-        graph_vertices = [
-            Vec2(-2.0, 1.5),
-            Vec2(0.0, 1.5),
-            Vec2(2.0, 1.5),
-            Vec2(0.0, 0.0),
-            Vec2(5.0, 1.5),
-        ]
-        graph_adjacencies = [
-            [ 1, 3 ],
-            [ 0, 2, 3 ],
-            [ 1, 3, 4 ],
-            [ 0, 1, 2 ],
-            [ 2 ],
-        ]
-        self.graph = Graph(graph_vertices, graph_adjacencies)
 
         self.pos_sum_error = 0
         self.pos_prev_error = 0
@@ -53,6 +41,24 @@ class SurvBot:
 
         self.move_queue = []
 
+        # generate_graph
+        self.graph = Graph("./maps/map.txt", "./maps/map.yaml")
+        # print([str(x) for x in self.graph.vertices])
+        # print(self.graph.adjacencies)
+
+        world_min = Vec2(0,0)
+        world_max = Vec2(self.graph.map_width,self.graph.map_height)
+        for i in range(num_vertices):
+            if i % 50 == 0:
+                rp.loginfo("Adding vertex %d", i)
+            x = random.randint(int(world_min.x), int(world_max.x - 1))
+            y = random.randint(int(world_min.y), int(world_max.y - 1))
+
+            new_vertex = self.graph.pixel_to_world(Vec2(x, y))
+            self.graph.insert_vertex(new_vertex, num_neighbours)
+
+        print([str(x) for x in self.graph.vertices])
+        print(self.graph.adjacencies)
 
     def init_ros_subscribers(self):
         self.state_sub = rp.Subscriber('/survbot/state', String, self.change_state) # Change state
@@ -95,8 +101,13 @@ class SurvBot:
 
     def state_pathfind(self):
         
-        self.graph.insert_vertex(self.position)
-        self.graph.insert_vertex(self.nav_target)
+        start_result = self.graph.insert_vertex(self.position, num_neighbours)
+        end_result = self.graph.insert_vertex(self.nav_target, num_neighbours)
+
+        if not start_result or not end_result:
+            rp.logerr("Failed to insert vertex")
+            self.internal_change_state("IDLE")
+            return
 
         self.move_queue = self.graph.a_star(len(self.graph.vertices) - 2, len(self.graph.vertices) - 1)
 
@@ -106,13 +117,15 @@ class SurvBot:
         self.internal_change_state("NAVIGATE")
 
     def state_navigate(self):
+        if len(self.move_queue) == 0:
+            rp.loginfo("Move Queue is Empty")
+            self.internal_change_state("IDLE")
+            return
+
         reached_target = self.move_to(self.position, self.yaw, self.move_queue[0])
 
         if reached_target:
             self.move_queue.pop(0)
-
-        if len(self.move_queue) == 0:
-            self.internal_change_state("IDLE")
 
     def state_patrol(self):
         pass
@@ -192,15 +205,17 @@ class SurvBot:
         linear_vel = Kp_pos * pos_error + Ki_pos * self.pos_sum_error + Kd_pos * pos_diff_error
         angular_vel = Kp_yaw * yaw_error + Ki_yaw * self.yaw_sum_error + Kd_yaw * yaw_diff_error
 
-
         msg = Twist()
-        msg.linear.x = linear_vel
+        if angular_vel < 1e-2:
+            msg.linear.x = linear_vel
         msg.angular.z = angular_vel
 
-        rp.loginfo("BOT Moving to (x,y): (%f,%f)", self.nav_target.x, self.nav_target.y)
-        rp.loginfo("BOT Error: %f", pos_error)
-        rp.loginfo("BOT forward Vel : %f", linear_vel)
-        rp.loginfo("BOT turn Vel : %f", angular_vel)
+        rp.loginfo("Target (x,y): (%f,%f)", self.nav_target.x, self.nav_target.y)
+        rp.loginfo("Moving to (x,y): (%f,%f)", target_position.x, target_position.y)
+        rp.loginfo("Distance Error: %f", pos_error)
+        rp.loginfo("Turn Error: %f", yaw_error)
+        rp.loginfo("forward Vel : %f", linear_vel)
+        rp.loginfo("turn Vel : %f", angular_vel)
 
         if pos_error < 0.3:
             reset = Twist()
@@ -210,6 +225,7 @@ class SurvBot:
         self.velocity_pub.publish(msg)
 
         return False
+
 
 def main():
     """
