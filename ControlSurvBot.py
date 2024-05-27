@@ -17,7 +17,7 @@ def main():
 
     while new_state != "EXIT":
         if new_state == "PATHFIND":
-            target_position_str = str(raw_input("Target Position (x,y) : ")).split(",")
+            target_position_str = str(raw_input("Target Position (x,y): ")).split(",")
             target_position = Vec2(float(target_position_str[0]), float(target_position_str[1]))
             print("Pathfinding to {0},{1}".format(target_position.x, target_position.y))
 

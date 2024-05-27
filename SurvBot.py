@@ -98,7 +98,8 @@ class SurvBot:
         self.graph.insert_vertex(self.position)
         self.graph.insert_vertex(self.nav_target)
 
-        self.move_queue = self.graph.a_star(len(self.graph.vertices)-2, len(self.graph.vertices)-1)
+        self.move_queue = self.graph.a_star(len(self.graph.vertices) - 2, len(self.graph.vertices) - 1)
+
         self.graph.remove_vertex(self.position)
         self.graph.remove_vertex(self.nav_target)
         
@@ -151,9 +152,6 @@ class SurvBot:
         self.nav_target = Vec2(coord_x, coord_y)
         rp.loginfo("Update Navigate Goal (x,y): (%f, %f)", coord_x, coord_y)
 
-        # ## TEMPORARY
-        # self.move_queue = [ self.nav_target ]
-
     def refresh_patrol_path(self):
         rp.loginfo("Refresh patrol path")
 
@@ -204,7 +202,7 @@ class SurvBot:
         rp.loginfo("BOT forward Vel : %f", linear_vel)
         rp.loginfo("BOT turn Vel : %f", angular_vel)
 
-        if pos_error < 0.1:
+        if pos_error < 0.3:
             reset = Twist()
             self.velocity_pub.publish(reset)
             return True
