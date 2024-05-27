@@ -1,4 +1,4 @@
-import queue
+import Queue
 
 from Vec2 import Vec2
 
@@ -20,6 +20,9 @@ class QueueItem:
     def __lt__(self, o):
         return self.h + self.g < o.h + o.g
 
+    def __cmp__(self, o):
+        return cmp(self.h + self.g, o.h + o.g)
+
     def __hash__(self):
         return hash(self.item_idx)
 
@@ -31,6 +34,29 @@ class Graph:
     def __init__(self, vertices, adjacencies):
         self.vertices = vertices
         self.adjacencies = adjacencies
+        
+    def insert_vertex(self, vertex):
+        node_distances = []
+        for node in self.vertices:
+            node_distances.append(node.distance_to(vertex))
+        adjacent_index = node_distances.index(min(node_distances))
+
+        vertex_idx = len(self.vertices)
+        self.vertices.append(vertex)
+        # Undirected graph so adjacent vertices must also have the new vertex added
+        self.adjacencies.append([adjacent_index])
+
+        self.adjacencies[adjacent_index].append(vertex_idx)
+    
+    def remove_vertex(self, vertex):
+        vertex_index = self.vertices.index(vertex)
+        self.vertices.remove(vertex)
+
+        # remove the vertex from the adjacency list of the other vertices
+        for adj in self.adjacencies:
+            if vertex_index in adj:
+                adj.remove(vertex_index)
+        self.adjacencies.pop(vertex_index)
 
     """
         A* Path Finding 
@@ -40,37 +66,42 @@ class Graph:
 
         goal_position = self.vertices[goal_idx]
 
-        frontier = queue.PriorityQueue()
-        frontier.put(QueueItem(start_idx, -1, self.vertices[start_idx].distance_to(goal_position)))
+        frontier = Queue.PriorityQueue()
+        explored = [None] * len(self.vertices)
+        in_frontier = [0] * len(self.vertices)
+
+        frontier.put(QueueItem(start_idx, -1, self.vertices[start_idx].distance_to(goal_position), 0))
+        in_frontier[start_idx] = 1
         size_frontier = 1
-        explored = None * len(self.vertices)
-        
+
         while not frontier.empty():
+            print("Frontier Size", size_frontier)
             if size_frontier >= len(self.vertices) * 1e4:
                 return []
 
             current = frontier.get()
             size_frontier -= 1
-
+            in_frontier[current.item_idx] = 0
+            
             if explored[current.item_idx] is None:
                 explored[current.item_idx] = current
-            elif (explored[current.item_idx].g + explored[current.item_idx].h) > (current.g + current.h):
-                explored[current.item_idx] = current
 
-            for child in self.adjacencies[current.item_idx]:
-                if child == goal_position:
-                    path = [child]
+            print("Current {} | Children {}".format(current.item_idx, self.adjacencies[current.item_idx]))
+            for child in self.adjacencies[current.item_idx]:  
+                if child == goal_idx:
+                    path = [self.vertices[child]]
 
                     backtrace = current
                     while backtrace.item_idx != start_idx:
-                        path.append(backtrace.item_idx)
+                        path.append(self.vertices[backtrace.item_idx])
                         backtrace = explored[backtrace.origin_idx]
 
-                    path.append(start_idx)
                     path.reverse()
                     return path
 
-                frontier.put(QueueItem(child, current.item_idx, self.vertices[child].distance_to(goal_position), current.g + self.vertices[child].distance_to(self.vertices[current.item_idx])))
-                size_frontier += 1
+                if explored[child] is None and in_frontier[child] == 0:
+                    frontier.put(QueueItem(child, current.item_idx, self.vertices[child].distance_to(goal_position), current.g + self.vertices[child].distance_to(self.vertices[current.item_idx])))
+                    size_frontier += 1
+                    in_frontier[child] = 1
 
         return []

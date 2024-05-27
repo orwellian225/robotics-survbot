@@ -17,7 +17,7 @@ def main():
 
     while new_state != "EXIT":
         if new_state == "PATHFIND":
-            target_position_str = str(raw_input("Target Position (x,y) : ")).split(",")
+            target_position_str = str(raw_input("Target Position (x,y): ")).split(",")
             target_position = Vec2(float(target_position_str[0]), float(target_position_str[1]))
             print("Pathfinding to {0},{1}".format(target_position.x, target_position.y))
 
@@ -27,7 +27,7 @@ def main():
             goal_update.z = 0
 
             goal_update_pub.publish(goal_update)
-            new_state = "NAVIGATE"
+            new_state = "PATHFIND"
             time.sleep(2)
 
         msg = String()
