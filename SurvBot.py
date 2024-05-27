@@ -94,18 +94,14 @@ class SurvBot:
         pass
 
     def state_pathfind(self):
-        # Temporary - Should actually insert the start / end vertices into the graph
-        start_idx = self.graph.vertices.index(Vec2(
-            m.floor(self.position.x),
-            m.floor(self.position.y),
-        ))
+        
+        self.graph.insert_vertex(self.position)
+        self.graph.insert_vertex(self.nav_target)
 
-        goal_idx = self.graph.vertices.index(Vec2(
-            m.floor(self.nav_target.x),
-            m.floor(self.nav_target.y),
-        ))
-
-        self.move_queue = self.graph.a_star(start_idx, goal_idx)
+        self.move_queue = self.graph.a_star(len(self.graph.vertices)-2, len(self.graph.vertices)-1)
+        self.graph.remove_vertex(self.position)
+        self.graph.remove_vertex(self.nav_target)
+        
         self.internal_change_state("NAVIGATE")
 
     def state_navigate(self):

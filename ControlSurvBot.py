@@ -27,7 +27,7 @@ def main():
             goal_update.z = 0
 
             goal_update_pub.publish(goal_update)
-            new_state = "NAVIGATE"
+            new_state = "PATHFIND"
             time.sleep(2)
 
         msg = String()

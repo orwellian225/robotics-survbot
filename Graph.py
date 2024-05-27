@@ -34,6 +34,19 @@ class Graph:
     def __init__(self, vertices, adjacencies):
         self.vertices = vertices
         self.adjacencies = adjacencies
+        
+    def insert_vertex(self, vertex):
+        self.vertices.append(vertex)
+        node_distances = []
+        for node in self.vertices:
+            node_distances.append(node.distance_to(vertex))
+        adjacent_index = node_distances.index(min(node_distances))
+        self.adjacencies.append([adjacent_index])
+    
+    def remove_vertex(self, vertex):
+        vertex_index = self.vertices.index(vertex)
+        self.vertices.remove(vertex)
+        self.adjacencies.pop(vertex_index)
 
     """
         A* Path Finding 
@@ -44,24 +57,27 @@ class Graph:
         goal_position = self.vertices[goal_idx]
 
         frontier = Queue.PriorityQueue()
-        frontier.put(QueueItem(start_idx, -1, self.vertices[start_idx].distance_to(goal_position)))
+        frontier.put(QueueItem(start_idx, -1, self.vertices[start_idx].distance_to(goal_position), 0))
         size_frontier = 1
-        explored = None * len(self.vertices)
+        explored = [None] * len(self.vertices)
 
         while not frontier.empty():
-            if size_frontier >= len(self.vertices) * 1e4:
+            print(size_frontier)
+            if size_frontier >= len(self.vertices) * 1e2:
                 return []
 
             current = frontier.get()
             size_frontier -= 1
+            
+          
 
             if explored[current.item_idx] is None:
                 explored[current.item_idx] = current
             elif (explored[current.item_idx].g + explored[current.item_idx].h) > (current.g + current.h):
                 explored[current.item_idx] = current
 
-            for child in self.adjacencies[current.item_idx]:
-                if child == goal_position:
+            for child in self.adjacencies[current.item_idx]:  
+                if child == goal_idx:
                     path = [child]
 
                     backtrace = current
