@@ -1,4 +1,4 @@
-import queue
+import Queue
 
 from Vec2 import Vec2
 
@@ -20,6 +20,9 @@ class QueueItem:
     def __lt__(self, o):
         return self.h + self.g < o.h + o.g
 
+    def __cmp__(self, o):
+        return cmp(self.h + self.g, o.h + o.g)
+
     def __hash__(self):
         return hash(self.item_idx)
 
@@ -40,11 +43,11 @@ class Graph:
 
         goal_position = self.vertices[goal_idx]
 
-        frontier = queue.PriorityQueue()
+        frontier = Queue.PriorityQueue()
         frontier.put(QueueItem(start_idx, -1, self.vertices[start_idx].distance_to(goal_position)))
         size_frontier = 1
         explored = None * len(self.vertices)
-        
+
         while not frontier.empty():
             if size_frontier >= len(self.vertices) * 1e4:
                 return []

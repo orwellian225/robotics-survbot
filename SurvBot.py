@@ -3,7 +3,7 @@ import rospy as rp
 import math as m
 
 from Vec2 import Vec2
-# from Graph import Graph
+from Graph import Graph
 
 from std_msgs.msg import String, Empty
 from geometry_msgs.msg import Vector3, Twist
@@ -44,7 +44,7 @@ class SurvBot:
             [ 0, 1, 2 ],
             [ 2 ],
         ]
-        # self.graph = Graph(graph_vertices, graph_adjacencies)
+        self.graph = Graph(graph_vertices, graph_adjacencies)
 
         self.pos_sum_error = 0
         self.pos_prev_error = 0
@@ -95,17 +95,17 @@ class SurvBot:
 
     def state_pathfind(self):
         # Temporary - Should actually insert the start / end vertices into the graph
-        # start_idx = self.graph.vertices.index(Vec2(
-        #     m.floor(self.position.x), 
-        #     m.floor(self.position.y), 
-        # ))
+        start_idx = self.graph.vertices.index(Vec2(
+            m.floor(self.position.x),
+            m.floor(self.position.y),
+        ))
 
-        # goal_idx = self.graph.vertices.index(Vec2(
-        #     m.floor(self.nav_target.x), 
-        #     m.floor(self.nav_target.y), 
-        # ))
+        goal_idx = self.graph.vertices.index(Vec2(
+            m.floor(self.nav_target.x),
+            m.floor(self.nav_target.y),
+        ))
 
-        # self.move_queue = self.graph.a_star(start_idx, goal_idx)
+        self.move_queue = self.graph.a_star(start_idx, goal_idx)
         self.internal_change_state("NAVIGATE")
 
     def state_navigate(self):
@@ -155,8 +155,8 @@ class SurvBot:
         self.nav_target = Vec2(coord_x, coord_y)
         rp.loginfo("Update Navigate Goal (x,y): (%f, %f)", coord_x, coord_y)
 
-        ## TEMPORARY
-        self.move_queue = [ self.nav_target ]
+        # ## TEMPORARY
+        # self.move_queue = [ self.nav_target ]
 
     def refresh_patrol_path(self):
         rp.loginfo("Refresh patrol path")
