@@ -12,7 +12,6 @@
 
 [Assignment PDF](./assignment2024.pdf)
 
-
 ## Running
 
 ### Download
@@ -109,4 +108,12 @@ Changing Surv State
 rostopic pub survbot/state std_msgs/String "NAVIGATE" # Move Surv towards the 
 rostopic pub survbot/state std_msgs/String "IDLE" # Stop Surv from moving
 rostopic pub survbot/state std_msgs/String "PATROL" # Move Surv along a cycle in the graph
+```
+
+### Preprocessing
+
+Once a map is generated, it needs to be feed through a pre-processor to generate a navigation graph
+
+```python
+python scripts/process_map.py <map_image_filepath> <map_yaml_filepath> <output_directory> <number_of_vertices> <number_of_neighbours>
 ```
