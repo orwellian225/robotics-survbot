@@ -117,3 +117,13 @@ Once a map is generated, it needs to be feed through a pre-processor to generate
 ```python
 python scripts/process_map.py <map_image_filepath> <map_yaml_filepath> <output_directory> <number_of_vertices> <number_of_neighbours>
 ```
+
+## Controlling SurvBot
+
+SurvBot has a dedicated controller script.
+
+Use the following command in a new terminal window:
+```bash
+cd robotics_assignment_ws/robotics-assignment
+python scripts/survbot_controller.py
+```
