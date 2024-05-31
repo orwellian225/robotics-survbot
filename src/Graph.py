@@ -1,5 +1,8 @@
 import Queue
+# import queue
 import numpy as np
+import cv2
+import csv
 import yaml
 
 from Vec2 import Vec2
@@ -32,42 +35,71 @@ class QueueItem:
         return "Parent {0} -> Point {1} | {2} | {3} | {4}".format(self.origin_idx, self.item_idx, self.g + self.h, self.g, self.h)
 
 class Graph:
-    def __init__(self, map_matrix_file, map_yaml_file):
-        self.vertices = []
-        self.adjacencies = []
-        self.map_matrix = np.genfromtxt(map_matrix_file, delimiter=",")
-        with open(map_yaml_file, 'r') as file:
+    def __init__(self, graph_filepath, map_yaml_filepath, map_filepath):
+        self.map = cv2.imread(map_filepath, cv2.IMREAD_GRAYSCALE)
+
+        with open(map_yaml_filepath, 'r') as file:
             map_yaml = yaml.safe_load(file)
-            self.map_width = map_yaml["width"]
-            self.map_height = map_yaml["height"]
+            self.map_width = self.map.shape[0]
+            self.map_height = self.map.shape[1]
             self.map_resolution = map_yaml["resolution"]
             self.map_origin = Vec2(map_yaml["origin"][0], map_yaml["origin"][1])
+
+        with open(graph_filepath, 'r') as f:
+            csvr = csv.reader(f, delimiter=',', )
+            self.vertices = []
+            self.adjacencies = []
+
+            for row in csvr:
+                # Skip the first line of column titles
+                if csvr.line_num == 1:
+                    continue
+
+                self.vertices.append(Vec2(float(row[1]), float(row[2])))
+                self.adjacencies.append([])
+                adjacencies = list(row[3])
+                adjacencies.pop() # remove last char ]
+                adjacencies.pop(0) #remove first char [
+                adjacencies = "".join(adjacencies)
+
+                for val in adjacencies.split():
+                    self.adjacencies[-1].append(int(val))
         
-    def insert_vertex(self, vertex, num_neighbours):
-        vertex_pixel = self.world_to_pixel(vertex)
-        if self.map_matrix[int(vertex_pixel.y)][int(vertex_pixel.x)] == 1:
-            return False
+    def insert_vertex(self, vertex):
+        """
+            insert a new vertex into the graph
+            return values:
+                0 => successfully added
+                -1 => invalid point
+                -2 => no connection to graph exists
+        """
+        # For reasons beyond me at this point (weird map transforms)
+        # The inserted vector needs to be flipped x = -x, y = -y
+        vertex.x *= -1
+        vertex.y *= -1
+        pixel_vector = self.world_to_pixel(vertex)
 
-        vertex_idx = len(self.vertices)
+        if self.map[int(pixel_vector.y), int(pixel_vector.x)] == 0:
+            return -1
+
+        closest_vi = -1
+        for i, v in enumerate(self.vertices):
+            valid_edge = self.is_valid_edge(vertex, v, 5)
+            if closest_vi == -1 and len(self.adjacencies[i]) != 0 and valid_edge:
+                closest_vi = i
+                continue 
+            
+            if len(self.adjacencies[i]) != 0 and vertex.distance_to(v) < vertex.distance_to(self.vertices[closest_vi]) and valid_edge:
+                closest_vi = i
+
+        if closest_vi == -1:
+            return -2 
+
         self.vertices.append(vertex)
-        self.adjacencies.append([])
+        self.adjacencies.append([ closest_vi ])
+        self.adjacencies[closest_vi].append( len(self.vertices) - 1 )
 
-        if len(self.adjacencies) == 1:
-            return True
-
-        distances = []
-        for i in range(len(self.vertices) - 1):
-            v = self.vertices[i]
-            distances.append((i, v.distance_to(vertex)))
-        distances.sort(key = lambda x: x[1])
-
-        for i in range(min(num_neighbours, len(distances))):
-            if self.valid_adjacency(vertex, self.vertices[distances[i][0]]):
-                # Undirected graph so adjacent vertices must also have the new vertex added
-                self.adjacencies[vertex_idx].append(distances[i][0])
-                self.adjacencies[distances[i][0]].append(vertex_idx)
-
-        return True
+        return 0
     
     def remove_vertex(self, vertex):
         vertex_index = self.vertices.index(vertex)
@@ -78,45 +110,6 @@ class Graph:
             if vertex_index in adj:
                 adj.remove(vertex_index)
         self.adjacencies.pop(vertex_index)
-
-    def valid_adjacency(self, start, end):
-        t = 0
-        while t < 1:
-            line_point = Vec2(
-                (end.x - start.x) * t + start.x,
-                (end.y - start.y) * t + start.y
-            )
-            line_pixel_point = self.world_to_pixel(line_point)
-
-            left_bound = int(line_pixel_point.x) - 10
-            right_bound = int(line_pixel_point.x) + 10
-
-            top_bound = int(line_pixel_point.y) - 10
-            bottom_bound = int(line_pixel_point.y) + 10
-
-            for x in range(left_bound, right_bound + 1, 1):
-                for y in range(top_bound, bottom_bound + 1, 1):
-                    if self.map_width <= x or x < 0 or self.map_height <= y or y < 0:
-                        continue
-                    
-                    if self.map_matrix[y][x] == 1:
-                        return False
-
-            t += 0.01
-
-        return True
-
-    def world_to_pixel(self, world_vector):
-        return Vec2(
-            (world_vector.x - self.map_origin.x) / self.map_resolution,
-            (world_vector.y - self.map_origin.y) / self.map_resolution
-        )
-
-    def pixel_to_world(self, pixel_vector):
-        return Vec2(
-            pixel_vector.x * self.map_resolution + self.map_origin.x,
-            pixel_vector.y * self.map_resolution + self.map_origin.y,
-        )
 
     """
         A* Path Finding 
@@ -163,3 +156,36 @@ class Graph:
                     in_frontier[child] = 1
 
         return []
+
+    def world_to_pixel(self, world_vector):
+        return Vec2(
+            self.map_width - 1 - (world_vector.x - self.map_origin.x) / self.map_resolution,
+            (world_vector.y - self.map_origin.y) / self.map_resolution
+        )
+
+    def pixel_to_world(self, pixel_vector):
+        return Vec2(
+            (self.map_width - 1 - pixel_vector.x) * self.map_resolution + self.map_origin.x,
+            pixel_vector.y * self.map_resolution + self.map_origin.y ,
+        )
+
+    def is_valid_edge(self, v1, v2, extent_around_x):
+        t = 0
+        result = True
+        while t < 1.01:
+            t += 0.01
+            line_t = Vec2(
+                (v2.x - v1.x) * t + v1.x,
+                (v2.y - v1.y) * t + v1.y,
+            )
+
+            # check surrouding x-pixels as well
+            for i in range(-extent_around_x, extent_around_x + 1):
+                # inverted dims
+                if line_t.y < 0 or line_t.y >= self.map_height or line_t.x + i < 0 or line_t.x + i >= self.map_width:
+                    continue
+
+                # if the map value is 255 on at least one point on the pixel, it'll become poisoned to false
+                result = result and self.map[int(line_t.x) + i, int(line_t.y)] == 255
+
+        return result

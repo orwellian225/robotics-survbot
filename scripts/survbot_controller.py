@@ -76,8 +76,8 @@ def handle_instruction(instruction, publishers, previous_instruction):
         target_str = str(raw_input("\tTarget Position (x,y): ")).split(",")
 
         target_msg = Vector3()
-        target_msg.x = float(target_str[0]), 
-        target_msg.y = float(target_str[1]), 
+        target_msg.x = float(target_str[0]) 
+        target_msg.y = float(target_str[1]) 
         target_msg.z = 0.0
 
         publishers['change_goal'].publish(target_msg)
@@ -95,8 +95,8 @@ def handle_instruction(instruction, publishers, previous_instruction):
         target_str = str(raw_input("\tTarget Position (x,y): ")).split(",")
 
         target_msg = Vector3()
-        target_msg.x = float(target_str[0]), 
-        target_msg.y = float(target_str[1]), 
+        target_msg.x = float(target_str[0]) 
+        target_msg.y = float(target_str[1]) 
         target_msg.z = 0.0
 
         publishers['change_goal'].publish(target_msg)
