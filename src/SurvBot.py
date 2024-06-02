@@ -6,8 +6,8 @@ from Vec2 import Vec2
 from Graph import Graph
 from PIDController import PIDController
 
-from std_msgs.msg import String, Empty
-from geometry_msgs.msg import Vector3, Twist
+from std_msgs.msg import String, Float32
+from geometry_msgs.msg import Vector3
 from gazebo_msgs.srv import GetModelState
 
 """
@@ -30,8 +30,10 @@ class SurvBot:
 
         self.pid = PIDController(
             '/mobile_base/commands/velocity',
-            0.1, 0., 0., 1., 0., 0.
+            0.6, 0., 0., 1., 0., 0.
         )
+
+        self.graph = Graph('../maps/graph_data.csv', '../maps/map2.yaml', '../maps/map_data.png')
 
         self.nav_target = Vec2(0,0)
         self.rotations = 1.
@@ -54,8 +56,9 @@ class SurvBot:
         # if self.state != "IDLE":
         rp.loginfo("\n")
         rp.loginfo("BOT Status: %s", self.state)
+        rp.loginfo("BOT Target (x,y): (%f,%f)", self.nav_target.x, self.nav_target.y)
         rp.loginfo("BOT Move Queue length: %d", len(self.move_queue))
-        rp.loginfo("BOT Order Queue length: %d", len(self.move_queue))
+        # rp.loginfo("BOT Order Queue length: %d", len(self.order_queue))
         rp.loginfo("BOT Position (x,y,z): (%f, %f, %f)", coordinates.x, coordinates.y, coordinates.z)
         rp.loginfo("BOT Rotation (w,x,y,z): (%f, %f, %f, %f)", rotation.w, rotation.x, rotation.y, rotation.z)
 
@@ -87,7 +90,34 @@ class SurvBot:
         pass
 
     def state_pathfind(self):
-        pass
+        end_result = self.graph.insert_vertex(self.nav_target)
+        start_result = self.graph.insert_vertex(self.position)
+
+        if start_result == -1:
+            rp.logwarn("PATHFIND Start vertex is invalid")
+            self.change_state("IDLE")
+            return
+        elif start_result == -2:
+            rp.logwarn("PATHFIND Start vertex has no valid edge in graph")
+            self.change_state("IDLE")
+            return
+
+        if end_result == -1:
+            rp.logwarn("PATHFIND Target vertex is invalid")
+            self.change_state("IDLE")
+            return
+        elif end_result == -2:
+            rp.logwarn("PATHFIND Target vertex has no valid edge in graph")
+            self.change_state("IDLE")
+            return
+
+        self.move_queue = self.graph.a_star(len(self.graph.vertices) - 1, len(self.graph.vertices) - 2)
+        # print([ str(x) for x in self.move_queue ])
+        # print([ str(self.graph.world_to_pixel(x)) for x in self.move_queue ])
+        self.graph.remove_vertex(self.position)
+        self.graph.remove_vertex(self.nav_target)
+
+        self.change_state("IDLE")
 
     def state_navigate(self):
         if len(self.move_queue) == 0:
@@ -95,7 +125,7 @@ class SurvBot:
             self.change_state("IDLE")
             return
 
-        pid_status = self.move_to(self.position, self.yaw, self.move_queue[0])
+        pid_status = self.pid.apply_pid(self.position, self.yaw, self.move_queue[0])
 
         if pid_status == 1:
             self.move_queue.pop(0)
@@ -118,6 +148,7 @@ class SurvBot:
         coord_y = data.y
         self.nav_target = Vec2(coord_x, coord_y)
         rp.loginfo("Update Navigate Goal (x,y): (%f, %f)", coord_x, coord_y)
+        self.change_state("PATHFIND")
 
     def update_rotations(self, data):
         pass
@@ -138,7 +169,7 @@ class SurvBot:
     def init_ros_subscribers(self):
         self.state_sub = rp.Subscriber('/survbot/state', String, self.update_state) # Change state
         self.navgoal_sub = rp.Subscriber('/survbot/navigate/goal', Vector3, self.update_goal) # Change Navigate goal
-        self.rotate_sub = rp.Subscriber('/survbot/scan/rotations', Vector3, self.update_goal) # Change Navigate goal
+        self.rotate_sub = rp.Subscriber('/survbot/scan/rotations', Float32, self.update_goal) # Change Navigate goal
 
     def init_ros_publishers(self):
         # self.notify_pub = rp.Publisher('/survbot/notifications', String, queue_size=1)

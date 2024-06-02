@@ -1,11 +1,13 @@
-import Queue
-# import queue
+# import Queue
+import queue
 import numpy as np
+import numpy.linalg as npl
 import cv2
 import csv
 import yaml
 
-from Vec2 import Vec2
+def distance_to(v1, v2):
+    return npl.norm(v1 - v2)
 
 class QueueItem:
     # h: float
@@ -43,7 +45,7 @@ class Graph:
             self.map_width = self.map.shape[0]
             self.map_height = self.map.shape[1]
             self.map_resolution = map_yaml["resolution"]
-            self.map_origin = Vec2(map_yaml["origin"][0], map_yaml["origin"][1])
+            self.map_origin = np.array([map_yaml["origin"][0], map_yaml["origin"][1]])
 
         with open(graph_filepath, 'r') as f:
             csvr = csv.reader(f, delimiter=',', )
@@ -55,7 +57,7 @@ class Graph:
                 if csvr.line_num == 1:
                     continue
 
-                self.vertices.append(Vec2(float(row[1]), float(row[2])))
+                self.vertices.append([ float(row[1]), float(row[2]) ])
                 self.adjacencies.append([])
                 adjacencies = list(row[3])
                 adjacencies.pop() # remove last char ]
@@ -64,6 +66,10 @@ class Graph:
 
                 for val in adjacencies.split():
                     self.adjacencies[-1].append(int(val))
+
+                self.adjacencies[-1] = np.array(self.adjacencies[-1])
+
+            self.vertices = np.array(self.vertices)
         
     def insert_vertex(self, vertex):
         """
@@ -73,57 +79,36 @@ class Graph:
                 -1 => invalid point
                 -2 => no connection to graph exists
         """
-        # For reasons beyond me at this point (weird map transforms)
-        # The inserted vector needs to be flipped x = -x, y = -y
-        vertex.x *= -1
-        vertex.y *= -1
-        pixel_vector = self.world_to_pixel(vertex)
-
-        if self.map[int(pixel_vector.y), int(pixel_vector.x)] == 0:
-            return -1
-
-        closest_vi = -1
-        for i, v in enumerate(self.vertices):
-            valid_edge = self.is_valid_edge(vertex, v, 5)
-            if closest_vi == -1 and len(self.adjacencies[i]) != 0 and valid_edge:
-                closest_vi = i
-                continue 
-            
-            if len(self.adjacencies[i]) != 0 and vertex.distance_to(v) < vertex.distance_to(self.vertices[closest_vi]) and valid_edge:
-                closest_vi = i
-
-        if closest_vi == -1:
-            return -2 
-
-        self.vertices.append(vertex)
-        self.adjacencies.append([ closest_vi ])
-        self.adjacencies[closest_vi].append( len(self.vertices) - 1 )
-
-        return 0
+        direction_vectors = np.array([])
+        for x in self.vertices:
+            direction_vectors = np.append(direction_vectors, x - vertex)
+        direction_vectors = np.reshape(direction_vectors, (len(self.vertices), 2))
+        distances = npl.norm(direction_vectors, axis=1)
+        closest_vertex = np.ravel(np.argmin(distances))[0]
+        np.append(self.vertices, vertex)
+        self.adjacencies.append([closest_vertex])
     
     def remove_vertex(self, vertex):
-        vertex_index = self.vertices.index(vertex)
-        self.vertices.remove(vertex)
+        """
+            Remove a vertex from the adjacency list
+        """
+        index = np.where(self.vertices == vertex).all(axis = 1)[0][0]
+        self.vertices = np.delete(self.vertices, index)
+        self.adjacencies.pop(index)
 
-        # remove the vertex from the adjacency list of the other vertices
-        for adj in self.adjacencies:
-            if vertex_index in adj:
-                adj.remove(vertex_index)
-        self.adjacencies.pop(vertex_index)
-
-    """
-        A* Path Finding 
-            * Assumes that the start and goal elements are already apart of the graph
-    """
     def a_star(self, start_idx, goal_idx):
+        """
+            A* Path Finding 
+                * Assumes that the start and goal elements are already apart of the graph
+        """
 
         goal_position = self.vertices[goal_idx]
 
-        frontier = Queue.PriorityQueue()
+        frontier = queue.PriorityQueue()
         explored = [None] * len(self.vertices)
         in_frontier = [0] * len(self.vertices)
 
-        frontier.put(QueueItem(start_idx, -1, self.vertices[start_idx].distance_to(goal_position), 0))
+        frontier.put(QueueItem(start_idx, -1, npl.norm(self.vertices[start_idx] - goal_position), 0))
         in_frontier[start_idx] = 1
         size_frontier = 1
 
@@ -151,41 +136,32 @@ class Graph:
                     return path
 
                 if explored[child] is None and in_frontier[child] == 0:
-                    frontier.put(QueueItem(child, current.item_idx, self.vertices[child].distance_to(goal_position), current.g + self.vertices[child].distance_to(self.vertices[current.item_idx])))
+                    frontier.put(QueueItem(child, current.item_idx, npl.norm(self.vertices[child] - goal_position), current.g + npl.norm(self.vertices[child] - self.vertices[current.item_idx])))
                     size_frontier += 1
                     in_frontier[child] = 1
 
         return []
 
     def world_to_pixel(self, world_vector):
-        return Vec2(
-            self.map_width - 1 - (world_vector.x - self.map_origin.x) / self.map_resolution,
-            (world_vector.y - self.map_origin.y) / self.map_resolution
-        )
+        return (world_vector - (-self.map_resolution * np.array([ self.map_width, 0 ]) + self.map_origin)) / self.map_resolution
 
     def pixel_to_world(self, pixel_vector):
-        return Vec2(
-            (self.map_width - 1 - pixel_vector.x) * self.map_resolution + self.map_origin.x,
-            pixel_vector.y * self.map_resolution + self.map_origin.y ,
-        )
+        return self.map_resolution * pixel_vector + (-self.map_resolution * np.array([ self.map_width, 0 ]) + self.map_origin)
 
-    def is_valid_edge(self, v1, v2, extent_around_x):
+    def is_valid_edge(self, v1, v2, map, map_dims, extent_around_x):
         t = 0
         result = True
         while t < 1.01:
             t += 0.01
-            line_t = Vec2(
-                (v2.x - v1.x) * t + v1.x,
-                (v2.y - v1.y) * t + v1.y,
-            )
+            line_t = (v2 - v1) * t + v1
 
             # check surrouding x-pixels as well
             for i in range(-extent_around_x, extent_around_x + 1):
                 # inverted dims
-                if line_t.y < 0 or line_t.y >= self.map_height or line_t.x + i < 0 or line_t.x + i >= self.map_width:
+                if line_t[1] < 0 or line_t[1] >= map_dims[1] or line_t[0] + i < 0 or line_t[0] + i >= map_dims[0]:
                     continue
 
                 # if the map value is 255 on at least one point on the pixel, it'll become poisoned to false
-                result = result and self.map[int(line_t.x) + i, int(line_t.y)] == 255
+                result = result and map[int(line_t[0]) + i, int(line_t[1])] == 255
 
         return result

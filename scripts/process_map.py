@@ -6,15 +6,12 @@ import yaml
 import cv2
 import sys
 
-def world_to_pixel(world_vector, resolution, origin, width):
-    return np.array([
-        width - 1 - (world_vector[0] - origin[0]) / resolution, 
-        (world_vector[1] - origin[1]) / resolution
-    ])
+def world_to_pixel(world_vector, resolution, world_pixel_origin, pixel_origin):
+    return (world_vector - (-resolution * pixel_origin + world_pixel_origin)) / resolution
 
-def pixel_to_world(pixel_vector, resolution, origin, width):
-    # return (np.array([width - 1, 0]) - pixel_vector) * resolution + origin
-    return np.array([ (width - 1 - pixel_vector[0]), pixel_vector[1] ]) * resolution + origin
+def pixel_to_world(pixel_vector, resolution, world_pixel_origin, pixel_origin):
+    # return resolution * (pixel_vector + pixel_origin) - world_pixel_origin
+    return resolution * pixel_vector + (-resolution * pixel_origin + world_pixel_origin)
 
 def is_valid_edge(v1, v2, map, map_dims, extent_around_x):
     t = 0
@@ -31,7 +28,6 @@ def is_valid_edge(v1, v2, map, map_dims, extent_around_x):
 
             # if the map value is 255 on at least one point on the pixel, it'll become poisoned to false
             result = result and map[int(line_t[0]) + i, int(line_t[1])] == 255
-
 
     return result
 
@@ -55,7 +51,7 @@ def main():
         map_width = map_image.shape[0]
         map_height = map_image.shape[1]
         map_resolution = map_yaml["resolution"]
-        map_origin = (map_yaml["origin"][0], map_yaml["origin"][1])
+        map_origin = np.array([map_yaml["origin"][0], map_yaml["origin"][1]])
 
     # Save the image to a pdf
     plt.imshow(map_image, cmap='gray')
@@ -126,8 +122,9 @@ def main():
     with open(output_dir + "/graph_data.csv", 'w') as f:
         f.write(f"Vertex ID,world x,world y,adjacencies\n")
         for i in range(len(graph_vertices)):
-            world_vertex = pixel_to_world(graph_vertices[i], map_resolution, map_origin, map_width)
             # print(f"{i},{world_vertex[0]},{world_vertex[1]},{graph_adjacencies[i]}\n")
+            # def pixel_to_world(pixel_vector, resolution, world_pixel_origin, pixel_origin):
+            world_vertex = pixel_to_world(graph_vertices[i], map_resolution, map_origin, np.array([map_width, 0]))
             f.write(f"{i},{world_vertex[0]},{world_vertex[1]},{graph_adjacencies[i]}\n")
 
     # Show the graph-map overlay
@@ -151,7 +148,7 @@ def main():
     #inverted because row-col is y-x
     # plt.scatter(all_vertices[:, 1], all_vertices[:, 0], s=1, color='green', zorder=1)
     plt.scatter(graph_vertices[:, 1], graph_vertices[:, 0], s=1, color='red', zorder=2)
-    plt.savefig(output_dir + "/eroded_graph_overlay.png")
+    plt.savefig(output_dir + "/eroded_graph_overlay.pdf")
 
 if __name__ == "__main__":
     main()
