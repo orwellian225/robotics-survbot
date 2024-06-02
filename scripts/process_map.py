@@ -105,7 +105,7 @@ def main():
             adjacency_filter[j] = is_valid_edge(graph_vertices[i], graph_vertices[neighbours[j]], eroded_image, (map_width, map_height), 5) and neighbours[j] < len(graph_vertices)
 
         graph_adjacencies.append(neighbours[adjacency_filter])
-    print(f"\rGenerated all vertex adjacencies{"": <20}")
+    print(f"\rGenerated all vertex adjacencies {'': <20}")
 
     ## Should be removing any vertices without edges, but this fucks with the adjacency lists because the new indices 
     ## of points after the deletion are not updated in the lists. So to avoid this, when a vertex is added, into the robot, 
@@ -127,6 +127,7 @@ def main():
             world_vertex = pixel_to_world(graph_vertices[i], map_resolution, map_origin, np.array([map_width, 0]))
             f.write(f"{i},{world_vertex[0]},{world_vertex[1]},{graph_adjacencies[i]}\n")
 
+    world_origin = world_to_pixel(np.array([0,0]), map_resolution, map_origin, np.array([ map_width , 0 ]))
     # Show the graph-map overlay
     plt.imshow(map_image, cmap='gray')
     for i in range(len(graph_adjacencies)):
@@ -136,7 +137,9 @@ def main():
             plt.plot(line[:2], line[2:4], linewidth=0.5, color="blue", zorder=0)
     #inverted because row-col is y-x
     plt.scatter(graph_vertices[:, 1], graph_vertices[:, 0], s=1, color='red', zorder=1)
-    plt.savefig(output_dir + "/map_graph_overlay.pdf")
+    plt.scatter(world_origin[1], world_origin[0], s=1, color='green', zorder=1)
+    # plt.savefig(output_dir + "/map_graph_overlay.pdf")
+    plt.show()
 
     # Show the graph-eroded overlay
     plt.imshow(eroded_image, cmap='gray')

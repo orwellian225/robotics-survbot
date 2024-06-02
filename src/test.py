@@ -12,8 +12,8 @@ map_image = cv2.imread('../maps/map2.pgm', cv2.IMREAD_GRAYSCALE)
 plt.imshow(map_image, cmap='gray')
 plt.axis('off')
 
-start = np.array([ 0., 0. ])
-goal = np.array([ -3.0, 3.0 ])
+start = np.array([ -0.5, 0. ])
+goal = np.array([ -3.0, -3.0 ])
 
 pixel_vertices = []
 for x in graph.vertices:
@@ -52,4 +52,5 @@ for i in range(len(path) - 1):
 pixel_path = np.array(pixel_path)
 plt.scatter(pixel_path[:, 1], pixel_path[:, 0], s=0.5, color='blue', zorder=2)
 
-plt.savefig('../test/map_graph_overlay.pdf')
+# plt.savefig('../test/map_graph_overlay.pdf')
+plt.show()
