@@ -70,7 +70,7 @@ class Graph:
                 self.adjacencies[-1] = np.array(self.adjacencies[-1])
 
             self.vertices = np.array(self.vertices)
-        
+
     def insert_vertex(self, vertex):
         """
             insert a new vertex into the graph
@@ -85,15 +85,29 @@ class Graph:
         direction_vectors = np.reshape(direction_vectors, (len(self.vertices), 2))
         distances = npl.norm(direction_vectors, axis=1)
         closest_vertex = np.ravel(np.argmin(distances))[0]
-        np.append(self.vertices, vertex)
-        self.adjacencies.append([closest_vertex])
-    
+        invalid_edge_filter = np.ones(len(self.vertices))
+
+        while not self.is_valid_edge(vertex, self.vertices[closest_vertex], 5):
+            invalid_edge_filter[closest_vertex] = 0
+            closest_vertex = np.ravel(np.argmin(distances[invalid_edge_filter]))[0]
+
+        self.vertices = np.append(self.vertices, [vertex], axis=0)
+        self.adjacencies.append(np.array([closest_vertex]))
+        self.adjacencies[closest_vertex] = np.append(self.adjacencies[closest_vertex], [len(self.vertices) - 1])
+
     def remove_vertex(self, vertex):
         """
             Remove a vertex from the adjacency list
+            You must remove in reverse order of insertion because reasons
+                * It messes with the indexing of the adjacency array, they no longer line up
         """
-        index = np.where(self.vertices == vertex).all(axis = 1)[0][0]
-        self.vertices = np.delete(self.vertices, index)
+
+        filter = (self.vertices != vertex).any(axis=1)
+        index = np.where(np.invert(filter))[0][0]
+        self.vertices = self.vertices[filter]
+        for i in self.adjacencies[index]:
+            remove_adj_filter = (self.adjacencies[i] != index)
+            self.adjacencies[i] = self.adjacencies[i][remove_adj_filter]
         self.adjacencies.pop(index)
 
     def a_star(self, start_idx, goal_idx):
@@ -143,12 +157,12 @@ class Graph:
         return []
 
     def world_to_pixel(self, world_vector):
-        return (world_vector - (-self.map_resolution * np.array([ self.map_width, 0 ]) + self.map_origin)) / self.map_resolution
+        return (world_vector - (self.map_resolution * np.array([ -self.map_width, 0 ]) + self.map_origin)) / self.map_resolution
 
     def pixel_to_world(self, pixel_vector):
         return self.map_resolution * pixel_vector + (-self.map_resolution * np.array([ self.map_width, 0 ]) + self.map_origin)
 
-    def is_valid_edge(self, v1, v2, map, map_dims, extent_around_x):
+    def is_valid_edge(self, v1, v2, extent_around_x):
         t = 0
         result = True
         while t < 1.01:
@@ -158,10 +172,10 @@ class Graph:
             # check surrouding x-pixels as well
             for i in range(-extent_around_x, extent_around_x + 1):
                 # inverted dims
-                if line_t[1] < 0 or line_t[1] >= map_dims[1] or line_t[0] + i < 0 or line_t[0] + i >= map_dims[0]:
+                if line_t[1] < 0 or line_t[1] >= self.map_width or line_t[0] + i < 0 or line_t[0] + i >= self.map_height:
                     continue
 
                 # if the map value is 255 on at least one point on the pixel, it'll become poisoned to false
-                result = result and map[int(line_t[0]) + i, int(line_t[1])] == 255
+                result = result and self.map[int(line_t[0]) + i, int(line_t[1])] == 255
 
         return result
