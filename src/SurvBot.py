@@ -35,10 +35,10 @@ class SurvBot:
 
         self.graph = Graph('../maps/graph_data.csv', '../maps/map2.yaml', '../maps/map_data.png')
 
-        self.nav_target = Vec2(0,0)
+        self.nav_target = np.zeros(2)
         self.rotations = 1.
 
-        self.position = Vec2(0,0)
+        self.position = np.zeros(2)
         self.yaw = 0
 
         self.move_queue = []
@@ -56,13 +56,13 @@ class SurvBot:
         # if self.state != "IDLE":
         rp.loginfo("\n")
         rp.loginfo("BOT Status: %s", self.state)
-        rp.loginfo("BOT Target (x,y): (%f,%f)", self.nav_target.x, self.nav_target.y)
+        rp.loginfo("BOT Target (x,y): (%f,%f)", self.nav_target[0], self.nav_target[1])
         rp.loginfo("BOT Move Queue length: %d", len(self.move_queue))
         # rp.loginfo("BOT Order Queue length: %d", len(self.order_queue))
         rp.loginfo("BOT Position (x,y,z): (%f, %f, %f)", coordinates.x, coordinates.y, coordinates.z)
         rp.loginfo("BOT Rotation (w,x,y,z): (%f, %f, %f, %f)", rotation.w, rotation.x, rotation.y, rotation.z)
 
-        self.position = Vec2(coordinates.x, coordinates.y)
+        self.position = np.array([ coordinates.x, coordinates.y ])
         self.yaw = m.atan2( 2 * ( rotation.w * rotation.z + rotation.x * rotation.y ), 1 - 2 * ( rotation.y**2 + rotation.z**2 ) )
 
         if self.state == "IDLE":
@@ -112,8 +112,7 @@ class SurvBot:
             return
 
         self.move_queue = self.graph.a_star(len(self.graph.vertices) - 1, len(self.graph.vertices) - 2)
-        # print([ str(x) for x in self.move_queue ])
-        # print([ str(self.graph.world_to_pixel(x)) for x in self.move_queue ])
+
         self.graph.remove_vertex(self.position)
         self.graph.remove_vertex(self.nav_target)
 
@@ -146,7 +145,7 @@ class SurvBot:
     def update_goal(self, data):
         coord_x = data.x
         coord_y = data.y
-        self.nav_target = Vec2(coord_x, coord_y)
+        self.nav_target = np.array([ coord_x, coord_y ])
         rp.loginfo("Update Navigate Goal (x,y): (%f, %f)", coord_x, coord_y)
         self.change_state("PATHFIND")
 
@@ -169,7 +168,7 @@ class SurvBot:
     def init_ros_subscribers(self):
         self.state_sub = rp.Subscriber('/survbot/state', String, self.update_state) # Change state
         self.navgoal_sub = rp.Subscriber('/survbot/navigate/goal', Vector3, self.update_goal) # Change Navigate goal
-        self.rotate_sub = rp.Subscriber('/survbot/scan/rotations', Float32, self.update_goal) # Change Navigate goal
+        self.rotate_sub = rp.Subscriber('/survbot/scan/rotations', Float32, self.update_rotations) # Change Navigate goal
 
     def init_ros_publishers(self):
         # self.notify_pub = rp.Publisher('/survbot/notifications', String, queue_size=1)

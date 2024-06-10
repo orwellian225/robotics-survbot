@@ -1,5 +1,5 @@
-# import Queue
-import queue
+import Queue
+# import queue
 import numpy as np
 import numpy.linalg as npl
 import cv2
@@ -79,6 +79,10 @@ class Graph:
                 -1 => invalid point
                 -2 => no connection to graph exists
         """
+        pixel_point = self.world_to_pixel(vertex)
+        if self.map[pixel_point[1], pixel_point[0]] == 0:
+            return -1
+
         direction_vectors = np.array([])
         for x in self.vertices:
             direction_vectors = np.append(direction_vectors, x - vertex)
@@ -91,9 +95,13 @@ class Graph:
             invalid_edge_filter[closest_vertex] = 0
             closest_vertex = np.ravel(np.argmin(distances[invalid_edge_filter]))[0]
 
+            if invalid_edge_filter.all() == False:
+                return -2
+
         self.vertices = np.append(self.vertices, [vertex], axis=0)
         self.adjacencies.append(np.array([closest_vertex]))
         self.adjacencies[closest_vertex] = np.append(self.adjacencies[closest_vertex], [len(self.vertices) - 1])
+        return 0
 
     def remove_vertex(self, vertex):
         """
@@ -118,7 +126,7 @@ class Graph:
 
         goal_position = self.vertices[goal_idx]
 
-        frontier = queue.PriorityQueue()
+        frontier = Queue.PriorityQueue()
         explored = [None] * len(self.vertices)
         in_frontier = [0] * len(self.vertices)
 

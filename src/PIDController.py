@@ -1,6 +1,7 @@
 import math as m
+import numpy as np
+import numpy.linalg as npl
 import rospy as rp
-from Vec2 import Vec2
 
 from geometry_msgs.msg import Twist
 
@@ -38,14 +39,14 @@ class PIDController:
                 1 => Reached target
         """
 
-        pos_error = current_position.distance_to(target_position)
+        pos_error = npl.norm(current_position - target_position)
         self.position_sum_error += pos_error
         pos_diff_error = pos_error - self.position_prev_error
         self.position_prev_error = pos_error
 
         target_direction = target_position - current_position
-        bot_direction = Vec2( m.cos(current_yaw), m.sin(current_yaw) )
-        yaw_error = target_direction.angle_to(bot_direction)
+        bot_direction = np.array([ m.cos(current_yaw), m.sin(current_yaw) ])
+        yaw_error = m.acos( np.dot(target_direction, bot_direction) / ( npl.norm(target_direction) * npl.norm(bot_direction) ) )
         self.yaw_sum_error += yaw_error
         yaw_diff_error = yaw_error - self.yaw_prev_error
         self.yaw_prev_error = yaw_error
@@ -54,11 +55,11 @@ class PIDController:
         angular_vel = self.yaw_Kp * yaw_error + self.yaw_Ki * self.yaw_sum_error + self.yaw_Kd * yaw_diff_error
 
         msg = Twist()
-        if angular_vel < 1e-3:
+        if angular_vel < 1e-2:
             msg.linear.x = linear_vel
         msg.angular.z = angular_vel
 
-        rp.loginfo("PID Moving to (x,y): (%f,%f)", target_position.x, target_position.y)
+        rp.loginfo("PID Moving to (x,y): (%f,%f)", target_position[0], target_position[1])
         rp.loginfo("PID Distance Error: %f", pos_error)
         rp.loginfo("PID Turn Error: %f", yaw_error)
         rp.loginfo("PID forward Velocity : %f", linear_vel)

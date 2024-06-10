@@ -138,8 +138,7 @@ def main():
     #inverted because row-col is y-x
     plt.scatter(graph_vertices[:, 1], graph_vertices[:, 0], s=1, color='red', zorder=1)
     plt.scatter(world_origin[1], world_origin[0], s=1, color='green', zorder=1)
-    # plt.savefig(output_dir + "/map_graph_overlay.pdf")
-    plt.show()
+    plt.savefig(output_dir + "/map_graph_overlay.pdf")
 
     # Show the graph-eroded overlay
     plt.imshow(eroded_image, cmap='gray')
