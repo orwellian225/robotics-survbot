@@ -6,11 +6,12 @@ import yaml
 import cv2
 import sys
 
-def world_to_pixel(world_vector, resolution, origin):
-    return (world_vector - origin) / resolution
+def world_to_pixel(world_vector, resolution, world_pixel_origin, pixel_origin):
+    return (world_vector - (-resolution * pixel_origin + world_pixel_origin)) / resolution
 
-def pixel_to_world(pixel_vector, resolution, origin):
-    return pixel_vector * resolution + origin
+def pixel_to_world(pixel_vector, resolution, world_pixel_origin, pixel_origin):
+    # return resolution * (pixel_vector + pixel_origin) - world_pixel_origin
+    return resolution * pixel_vector + (-resolution * pixel_origin + world_pixel_origin)
 
 def is_valid_edge(v1, v2, map, map_dims, extent_around_x):
     t = 0
@@ -27,7 +28,6 @@ def is_valid_edge(v1, v2, map, map_dims, extent_around_x):
 
             # if the map value is 255 on at least one point on the pixel, it'll become poisoned to false
             result = result and map[int(line_t[0]) + i, int(line_t[1])] == 255
-
 
     return result
 
@@ -51,7 +51,7 @@ def main():
         map_width = map_image.shape[0]
         map_height = map_image.shape[1]
         map_resolution = map_yaml["resolution"]
-        map_origin = (map_yaml["origin"][0], map_yaml["origin"][1])
+        map_origin = np.array([map_yaml["origin"][0], map_yaml["origin"][1]])
 
     # Save the image to a pdf
     plt.imshow(map_image, cmap='gray')
@@ -80,6 +80,9 @@ def main():
         valid_filter[i] = eroded_image[sampled_points[i,0], sampled_points[i,1]] 
     all_vertices = sampled_points[valid_filter]
 
+    # Save the eroded map data for testing point validity
+    cv2.imwrite(output_dir + '/map_data.png', eroded_image)
+
     # Reduce the graph vertices to nearest centroids
     kmeans = KMeans(n_clusters=graph_size, init='k-means++', max_iter=1000)
     kmeans.fit(all_vertices)
@@ -94,24 +97,37 @@ def main():
     for i in range(len(neigbours_mat)):
         if i % 50 == 0:
             print(f"\r{i} / {graph_size} adjacencies generated", end="", flush=True)
-        neigbours = neigbours_mat[i, 1:]
+        neighbours = neigbours_mat[i, 1:]
         adjacency_filter = np.ones(num_neighbours, dtype=bool)
 
-        for j in range(len(neigbours)):
+        for j in range(len(neighbours)):
             # CHECK IF THE ADJACENCY IS VALID HERE
-            adjacency_filter[j] = is_valid_edge(graph_vertices[i], graph_vertices[neigbours[j]], eroded_image, (map_width, map_height), 3)
+            adjacency_filter[j] = is_valid_edge(graph_vertices[i], graph_vertices[neighbours[j]], eroded_image, (map_width, map_height), 5) and neighbours[j] < len(graph_vertices)
 
-        graph_adjacencies.append(neigbours[adjacency_filter])
-    print(f"\rGenerated all vertex adjacencies{"": <20}")
+        graph_adjacencies.append(neighbours[adjacency_filter])
+    print(f"\rGenerated all vertex adjacencies {'': <20}")
+
+    ## Should be removing any vertices without edges, but this fucks with the adjacency lists because the new indices 
+    ## of points after the deletion are not updated in the lists. So to avoid this, when a vertex is added, into the robot, 
+    ## it will add the vertex to the closest vertex with a non-zero degree
+    # remove_filter = np.ones(len(graph_vertices), dtype=bool)
+    # for i in range(len(graph_vertices)):
+    #     if len(graph_adjacencies[i]) == 0:
+    #         remove_filter[i] = 0
+
+    # graph_vertices = graph_vertices[remove_filter]
+    # graph_adjacencies = [x for i, x in enumerate(graph_adjacencies) if remove_filter[i] != 0]
 
     # Save the graph to a textfile
     with open(output_dir + "/graph_data.csv", 'w') as f:
         f.write(f"Vertex ID,world x,world y,adjacencies\n")
         for i in range(len(graph_vertices)):
-            world_vertex = pixel_to_world(graph_vertices[i], map_resolution, map_origin)
             # print(f"{i},{world_vertex[0]},{world_vertex[1]},{graph_adjacencies[i]}\n")
+            # def pixel_to_world(pixel_vector, resolution, world_pixel_origin, pixel_origin):
+            world_vertex = pixel_to_world(graph_vertices[i], map_resolution, map_origin, np.array([map_width, 0]))
             f.write(f"{i},{world_vertex[0]},{world_vertex[1]},{graph_adjacencies[i]}\n")
 
+    world_origin = world_to_pixel(np.array([0,0]), map_resolution, map_origin, np.array([ map_width , 0 ]))
     # Show the graph-map overlay
     plt.imshow(map_image, cmap='gray')
     for i in range(len(graph_adjacencies)):
@@ -121,6 +137,7 @@ def main():
             plt.plot(line[:2], line[2:4], linewidth=0.5, color="blue", zorder=0)
     #inverted because row-col is y-x
     plt.scatter(graph_vertices[:, 1], graph_vertices[:, 0], s=1, color='red', zorder=1)
+    plt.scatter(world_origin[1], world_origin[0], s=1, color='green', zorder=1)
     plt.savefig(output_dir + "/map_graph_overlay.pdf")
 
     # Show the graph-eroded overlay
