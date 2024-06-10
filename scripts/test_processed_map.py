@@ -2,8 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import cv2
 
-from Vec2 import Vec2
-from Graph import Graph
+from ..src.Graph import Graph
 
 graph = Graph('../maps/graph_data.csv', '../maps/map2.yaml', '../maps/map_data.png')
 
