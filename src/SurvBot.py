@@ -33,7 +33,7 @@ class SurvBot:
             0.6, 0., 0., 1., 0., 0.
         )
 
-        self.graph = Graph('../maps/graph_data.csv', '../maps/map2.yaml', '../maps/map_data.png')
+        self.graph = Graph('maps/graph_data.csv', 'maps/map2.yaml', 'maps/map_data.png')
 
         self.nav_target = np.zeros(2)
         self.rotations = 1.
