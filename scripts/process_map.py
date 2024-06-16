@@ -6,13 +6,6 @@ import yaml
 import cv2
 import sys
 
-def world_to_pixel(world_vector, resolution, world_pixel_origin, pixel_origin):
-    return (world_vector - (-resolution * pixel_origin + world_pixel_origin)) / resolution
-
-def pixel_to_world(pixel_vector, resolution, world_pixel_origin, pixel_origin):
-    # return resolution * (pixel_vector + pixel_origin) - world_pixel_origin
-    return resolution * pixel_vector + (-resolution * pixel_origin + world_pixel_origin)
-
 def is_valid_edge(v1, v2, map, map_dims, extent_around_x):
     t = 0
     result = True
@@ -48,10 +41,17 @@ def main():
     map_image = cv2.imread(map_image_filepath, 0)
     with open(map_yaml_filepath, 'r') as file:
         map_yaml = yaml.safe_load(file)
-        map_width = map_image.shape[0]
-        map_height = map_image.shape[1]
+        map_width = map_image.shape[1]
+        map_height = map_image.shape[0]
         map_resolution = map_yaml["resolution"]
         map_origin = np.array([map_yaml["origin"][0], map_yaml["origin"][1]])
+
+        pixel_to_world = np.array([
+            [0, map_resolution, -map_origin[0] ],
+            [-map_resolution, 0, map_height * map_resolution + map_origin[1] ],
+            [0, 0, 1 ]
+        ])
+        world_to_pixel = np.linalg.inv(pixel_to_world)
 
     # Save the image to a pdf
     plt.imshow(map_image, cmap='gray')
@@ -71,8 +71,8 @@ def main():
     # Generate the graph points
 
     sampled_points = np.column_stack((
-        np.random.randint(0, map_width, graph_size * 5), # \hat{x} positions
-        np.random.randint(0, map_height, graph_size * 5) # \hat{y} positions
+        np.random.randint(0, map_height, graph_size * 5), # \hat{x} positions
+        np.random.randint(0, map_width, graph_size * 5) # \hat{y} positions
     ))
 
     valid_filter = np.ones(graph_size * 5, dtype=bool)
@@ -124,10 +124,11 @@ def main():
         for i in range(len(graph_vertices)):
             # print(f"{i},{world_vertex[0]},{world_vertex[1]},{graph_adjacencies[i]}\n")
             # def pixel_to_world(pixel_vector, resolution, world_pixel_origin, pixel_origin):
-            world_vertex = pixel_to_world(graph_vertices[i], map_resolution, map_origin, np.array([map_width, 0]))
-            f.write(f"{i},{world_vertex[0]},{world_vertex[1]},{graph_adjacencies[i]}\n")
+            world_vertex = np.matmul(pixel_to_world, (np.append(graph_vertices[i], [1])[:,None])).transpose()
+            # print(world_vertex, world_vertex[0][0], world_vertex[0][1])
+            f.write(f"{i},{world_vertex[0][0]},{world_vertex[0][1]},{graph_adjacencies[i]}\n")
 
-    world_origin = world_to_pixel(np.array([0,0]), map_resolution, map_origin, np.array([ map_width , 0 ]))
+    world_origin = world_to_pixel * np.array([0, 0, 1])
     # Show the graph-map overlay
     plt.imshow(map_image, cmap='gray')
     for i in range(len(graph_adjacencies)):
@@ -145,7 +146,7 @@ def main():
     for i in range(len(graph_adjacencies)):
         for n in graph_adjacencies[i]:
             #inverted because row-col is y-x
-            line = np.array([graph_vertices[i][1], graph_vertices[n][1], graph_vertices[i][0], graph_vertices[n][0]])
+            line = np.array([graph_vertices[i][0], graph_vertices[n][0], graph_vertices[i][1], graph_vertices[n][1]])
             plt.plot(line[:2], line[2:4], linewidth=0.2, color="blue", zorder=0)
     #inverted because row-col is y-x
     # plt.scatter(all_vertices[:, 1], all_vertices[:, 0], s=1, color='green', zorder=1)
