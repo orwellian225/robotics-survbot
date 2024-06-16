@@ -44,8 +44,15 @@ class Graph:
             map_yaml = yaml.safe_load(file)
             self.map_width = self.map.shape[0]
             self.map_height = self.map.shape[1]
-            self.map_resolution = map_yaml["resolution"]
-            self.map_origin = np.array([map_yaml["origin"][0], map_yaml["origin"][1]])
+            map_resolution = map_yaml["resolution"]
+            map_origin = np.array([map_yaml["origin"][0], map_yaml["origin"][1]])
+
+            self.pixel_to_world = np.array([
+                [0, map_resolution, -map_origin[0] ],
+                [-map_resolution, 0, self.map_height * map_resolution + map_origin[1] ],
+                [0, 0, 1 ]
+            ])
+            self.world_to_pixel = npl.inv(self.pixel_to_world)
 
         with open(graph_filepath, 'r') as f:
             csvr = csv.reader(f, delimiter=',', )
@@ -79,8 +86,8 @@ class Graph:
                 -1 => invalid point
                 -2 => no connection to graph exists
         """
-        pixel_point = self.world_to_pixel(vertex)
-        if self.map[pixel_point[1], pixel_point[0]] == 0:
+        pixel_point = np.matmul(self.world_to_pixel, np.append(vertex, [1])[:,None]).T.astype(np.uint32)[0]
+        if self.map[pixel_point[0], pixel_point[1]] == 0:
             return -1
 
         direction_vectors = np.array([])
@@ -100,7 +107,7 @@ class Graph:
 
         self.vertices = np.append(self.vertices, [vertex], axis=0)
         self.adjacencies.append(np.array([closest_vertex]))
-        self.adjacencies[closest_vertex] = np.append(self.adjacencies[closest_vertex], [len(self.vertices) - 1])
+        self.adjacencies[closest_vertex] = np.append(self.adjacencies[closest_vertex], [len(self.vertices) - 1]).astype(np.uint32)
         return 0
 
     def remove_vertex(self, vertex):
@@ -164,11 +171,11 @@ class Graph:
 
         return []
 
-    def world_to_pixel(self, world_vector):
-        return (world_vector - (self.map_resolution * np.array([ -self.map_width, 0 ]) + self.map_origin)) / self.map_resolution
+    # def world_to_pixel(self, world_vector):
+    #     return result
 
-    def pixel_to_world(self, pixel_vector):
-        return self.map_resolution * pixel_vector + (-self.map_resolution * np.array([ self.map_width, 0 ]) + self.map_origin)
+    # def pixel_to_world(self, pixel_vector):
+    #     return self.map_resolution * pixel_vector - (self.map_resolution * np.array([ self.map_height, 0 ]) - self.map_origin)
 
     def is_valid_edge(self, v1, v2, extent_around_x):
         t = 0
