@@ -42,7 +42,10 @@ class SurvBot:
         self.yaw = 0
 
         self.move_queue = []
+        self.move_queue_idx = 0
         self.state_queue = []
+
+        self.patrol_direction = 1
 
     def loop(self):
         rp_rate = rp.Rate(10)
@@ -53,14 +56,14 @@ class SurvBot:
 
     def update(self):
         coordinates, rotation = self.get_world_state()
-        # if self.state != "IDLE":
-        rp.loginfo("\n")
-        rp.loginfo("BOT Status: %s", self.state)
-        rp.loginfo("BOT Target (x,y): (%f,%f)", self.nav_target[0], self.nav_target[1])
-        rp.loginfo("BOT Move Queue length: %d", len(self.move_queue))
-        # rp.loginfo("BOT Order Queue length: %d", len(self.order_queue))
-        rp.loginfo("BOT Position (x,y,z): (%f, %f, %f)", coordinates.x, coordinates.y, coordinates.z)
-        rp.loginfo("BOT Rotation (w,x,y,z): (%f, %f, %f, %f)", rotation.w, rotation.x, rotation.y, rotation.z)
+        if self.state != "IDLE":
+            rp.loginfo("\n")
+            rp.loginfo("BOT Status: %s", self.state)
+            rp.loginfo("BOT Target (x,y): (%f,%f)", self.nav_target[0], self.nav_target[1])
+            rp.loginfo("BOT Move Queue: %d / %d", self.move_queue_idx + 1, len(self.move_queue))
+            # rp.loginfo("BOT Order Queue length: %d", len(self.order_queue))
+            rp.loginfo("BOT Position (x,y,z): (%f, %f, %f)", coordinates.x, coordinates.y, coordinates.z)
+            rp.loginfo("BOT Rotation (w,x,y,z): (%f, %f, %f, %f)", rotation.w, rotation.x, rotation.y, rotation.z)
 
         self.position = np.array([ coordinates.x, coordinates.y ])
         self.yaw = m.atan2( 2 * ( rotation.w * rotation.z + rotation.x * rotation.y ), 1 - 2 * ( rotation.y**2 + rotation.z**2 ) )
@@ -74,7 +77,7 @@ class SurvBot:
         elif self.state == "SCAN":
             self.state_scan()
         elif self.state == "PATROL":
-            self.state_pathfind()
+            self.state_patrol()
 
     def change_state(self, new_state):
         new_state = new_state.upper()
@@ -112,6 +115,7 @@ class SurvBot:
             return
 
         self.move_queue = self.graph.a_star(len(self.graph.vertices) - 1, len(self.graph.vertices) - 2)
+        self.move_queue_idx = 0
 
         self.graph.remove_vertex(self.position)
         self.graph.remove_vertex(self.nav_target)
@@ -119,15 +123,17 @@ class SurvBot:
         self.change_state("IDLE")
 
     def state_navigate(self):
-        if len(self.move_queue) == 0:
+        if self.move_queue_idx == len(self.move_queue):
             rp.loginfo("Move Queue is Empty")
+            self.move_queue = []
+            self.move_queue_idx = 0
             self.change_state("IDLE")
             return
 
-        pid_status = self.pid.apply_pid(self.position, self.yaw, self.move_queue[0])
+        pid_status = self.pid.apply_pid(self.position, self.yaw, self.move_queue[self.move_queue_idx])
 
         if pid_status == 1:
-            self.move_queue.pop(0)
+            self.move_queue_idx += 1
         elif pid_status == -1:
             rp.logwarn("SurvBot PID failed to move enough")
             self.change_state("IDLE")
@@ -136,7 +142,19 @@ class SurvBot:
         pass
 
     def state_patrol(self):
-        pass
+        if self.move_queue_idx == len(self.move_queue):
+            self.patrol_direction = -1
+            self.move_queue_idx -= 1 # at +1 final vertex so just go back to the last vertex idx
+        elif self.move_queue_idx == 0:
+            self.patrol_direction = 1
+
+        pid_status = self.pid.apply_pid(self.position, self.yaw, self.move_queue[self.move_queue_idx])
+
+        if pid_status == 1:
+            self.move_queue_idx += self.patrol_direction * 1
+        elif pid_status == -1:
+            rp.logwarn("SurvBot PID failed to move enough")
+            self.change_state("IDLE")
 
     def update_state(self, data):
         new_state = str(data.data)

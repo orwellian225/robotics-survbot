@@ -55,9 +55,12 @@ class PIDController:
         angular_vel = self.yaw_Kp * yaw_error + self.yaw_Ki * self.yaw_sum_error + self.yaw_Kd * yaw_diff_error
 
         msg = Twist()
-        if angular_vel < 1e-2:
+        if yaw_error < 0.3:
             msg.linear.x = linear_vel
-        msg.angular.z = angular_vel
+            msg.angular.z = 0
+        else:
+            msg.linear.x = 0
+            msg.angular.z = angular_vel
 
         rp.loginfo("PID Moving to (x,y): (%f,%f)", target_position[0], target_position[1])
         rp.loginfo("PID Distance Error: %f", pos_error)
