@@ -23,9 +23,6 @@ def print_help():
     print("\tROTATE - Change the number of rotations in a scan")
     print("\tSCAN - Make SurvBot scan its current surroudings")
     print("\tPATROL - Make SurvBot follow a patrol path")
-    print("-----------------------")
-    print("\tMOVE-TO - Change SurvBot's navigation target, and then move towards it")
-    print("\tSCAN-FOR - Change SurvBot's rotation count, and then perform a scan")
 
 instructions = [
     "EXIT", "HELP", "REPEAT",
@@ -85,40 +82,13 @@ def handle_instruction(instruction, publishers, previous_instruction):
 
     elif instruction == "ROTATE":
         rotations = float(raw_input("\tNumber of rotations (x): "))
-        msg = Float32()
-        msg.data = rotations 
+        rotation_speed = float(raw_input("\tSpeed of rotations (x): "))
+        msg = Vector3()
+        msg.x = rotations 
+        msg.y = rotation_speed
 
         publishers['change_scan'].publish(msg)
-        print("\tSetting number of rotations ({0})".format(rotations))
-
-    elif instruction == "MOVE-TO":
-        target_str = str(raw_input("\tTarget Position (x,y): ")).split(",")
-
-        target_msg = Vector3()
-        target_msg.x = float(target_str[0]) 
-        target_msg.y = float(target_str[1]) 
-        target_msg.z = 0.0
-
-        publishers['change_goal'].publish(target_msg)
-
-        time.sleep(1)
-        state_msg = String()
-        state_msg.data = "NAVIGATE"
-        publishers['change_state'].publish(state_msg)
-        print("\tMoving to {0},{1}".format(target_str[0], target_str[1]))
-
-    elif instruction == "SCAN-FOR":
-        rotations = float(raw_input("\tNumber of rotations (x): "))
-        msg = Float32()
-        msg.data = rotations 
-
-        publishers['change_scan'].publish(msg)
-
-        time.sleep(1)
-        state_msg = String()
-        state_msg.data = "SCAN"
-        publishers['change_state'].publish(state_msg)
-        print("\tScanning for {0} rotations".format(rotations))
+        print("\tSetting number of rotations ({0}, {1})".format(rotations, rotation_speed))
 
     return instruction
 
@@ -135,7 +105,7 @@ def main():
     ros_pubs = {
         'change_state': rp.Publisher('/survbot/state', String, queue_size=1),
         'change_goal': rp.Publisher('/survbot/navigate/goal', Vector3, queue_size=1),
-        'change_scan': rp.Publisher('/survbot/scan/rotations', Float32, queue_size=1),
+        'change_scan': rp.Publisher('/survbot/scan/rotations', Vector3, queue_size=1),
     }
 
     while next_instruction != "EXIT":
