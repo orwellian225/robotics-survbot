@@ -2,12 +2,11 @@ import numpy as np
 import rospy as rp
 import math as m
 
-from Vec2 import Vec2
 from Graph import Graph
 from PIDController import PIDController
 
-from std_msgs.msg import String, Float32
-from geometry_msgs.msg import Vector3
+from std_msgs.msg import String
+from geometry_msgs.msg import Vector3, Twist
 from gazebo_msgs.srv import GetModelState
 
 """
@@ -24,9 +23,11 @@ all_states = ["IDLE", "PATHFIND", "NAVIGATE", "SCAN",  "PATROL"]
 class SurvBot:
     def __init__(self):
         self.state = "IDLE"
+
         rp.init_node("survbot")
         self.init_ros_subscribers()
         self.init_ros_publishers()
+        self.rate = 10
 
         self.pid = PIDController(
             '/mobile_base/commands/velocity',
@@ -36,7 +37,10 @@ class SurvBot:
         self.graph = Graph('maps/graph_data.csv', 'maps/map2.yaml', 'maps/map_data.png')
 
         self.nav_target = np.zeros(2)
+
         self.rotations = 1.
+        self.rotation_speed = 0.3
+        self.completed_rotations = 0.
 
         self.position = np.zeros(2)
         self.yaw = 0
@@ -48,7 +52,7 @@ class SurvBot:
         self.patrol_direction = 1
 
     def loop(self):
-        rp_rate = rp.Rate(10)
+        rp_rate = rp.Rate(self.rate)
         while not rp.is_shutdown():
             self.update()
 
@@ -85,6 +89,7 @@ class SurvBot:
             rp.loginfo("Changing state: %s -> %s", self.state, new_state)
 
             self.pid.reset_pid()
+            self.completed_rotations = 0.
             self.state = new_state 
         else:
             rp.logwarn("Invalid state requested: %s does not exist", new_state)
@@ -139,7 +144,17 @@ class SurvBot:
             self.change_state("IDLE")
 
     def state_scan(self):
-        pass
+        rotate_msg = Twist()
+        rotate_msg.angular.z = self.rotation_speed
+        self.completed_rotations += self.rotation_speed / self.rate
+        rp.loginfo("BOT Completed Rotations: %f", self.completed_rotations)
+
+        self.rotate_pub.publish(rotate_msg)
+
+        if self.completed_rotations > self.rotations:
+            rp.loginfo("Completed rotations")
+            self.change_state("IDLE")
+
 
     def state_patrol(self):
         if self.move_queue_idx == len(self.move_queue):
@@ -168,7 +183,9 @@ class SurvBot:
         self.change_state("PATHFIND")
 
     def update_rotations(self, data):
-        pass
+        self.rotations = data.x * 2 * m.pi
+        self.rotation_speed = data.y
+        rp.loginfo("Update Scan parameters (number, speed): (%f, %f)", self.rotations, self.rotation_speed)
 
     def get_world_state(self):
         rp.wait_for_service("/gazebo/get_model_state")
@@ -186,10 +203,11 @@ class SurvBot:
     def init_ros_subscribers(self):
         self.state_sub = rp.Subscriber('/survbot/state', String, self.update_state) # Change state
         self.navgoal_sub = rp.Subscriber('/survbot/navigate/goal', Vector3, self.update_goal) # Change Navigate goal
-        self.rotate_sub = rp.Subscriber('/survbot/scan/rotations', Float32, self.update_rotations) # Change Navigate goal
+        self.rotate_sub = rp.Subscriber('/survbot/scan/rotations', Vector3, self.update_rotations) # Change Navigate goal
 
     def init_ros_publishers(self):
         # self.notify_pub = rp.Publisher('/survbot/notifications', String, queue_size=1)
+        self.rotate_pub = rp.Publisher('/mobile_base/commands/velocity', Twist, queue_size=1)
         pass
 
 
